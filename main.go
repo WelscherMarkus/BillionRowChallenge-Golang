@@ -71,6 +71,7 @@ func main() {
 		log.Fatalf("failed to write to CSV: %s", err)
 	}
 
+	log.Println("Done")
 }
 
 func process() {
