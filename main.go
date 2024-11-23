@@ -28,8 +28,6 @@ var mapMutex sync.Mutex
 var count int
 var countMux sync.Mutex
 
-var wg sync.WaitGroup
-
 var now = time.Now()
 
 func main() {
@@ -45,7 +43,6 @@ func main() {
 
 	start := time.Now()
 
-	//importFile()
 	process()
 
 	weatherStationNames := make([]string, 0, len(weatherData))
@@ -80,104 +77,23 @@ func process() {
 		panic(err)
 	}
 
-	//var recordsChannel = make(chan []string)
-
 	scanner := bufio.NewScanner(file)
-
 	for scanner.Scan() {
 		line := scanner.Text()
-		records := strings.Split(line, ";")
-		//recordsChannel <- records
-		worker(records)
+
+		weatherStation, temperature, _ := strings.Cut(line, ";")
+		worker(weatherStation, temperature)
 	}
-
-	//go func() {
-	//	defer close(recordsChannel)
-	//	for scanner.Scan() {
-	//		line := scanner.Text()
-	//		records := strings.Split(line, ";")
-	//		recordsChannel <- records
-	//	}
-	//}()
-	//
-	//for i := 0; i < 10; i++ {
-	//	go func() {
-	//		wg.Add(1)
-	//		defer wg.Done()
-	//		for record := range recordsChannel {
-	//			worker(record)
-	//		}
-	//	}()
-	//}
-	//
-	//time.Sleep(1 * time.Second)
-	//
-	//wg.Wait()
-
-	//const bufferSize = 1024
-	//buffer := make([]byte, bufferSize)
-	//
-	//var rawBytesChannel = make(chan []byte)
-	//
-	//for {
-	//	bytesRead, err := file.Read(buffer)
-	//	if err != nil {
-	//		if err == io.EOF {
-	//			log.Println("EOF")
-	//			break
-	//		}
-	//		panic(err)
-	//	}
-	//	rawBytesChannel <- buffer[:bytesRead]
-	//}
-	//
-	//for rawData := range rawBytesChannel {
-	//	_ = rawData
-	//}
-
 }
 
-func writeToCSV(data map[string]Info) error {
-	file, err := os.Create("weather_data.csv")
-	if err != nil {
-		return fmt.Errorf("failed to create result file: %s", err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	err = writer.Write([]string{"City", "Min", "Max", "Sum", "Count", "Avg"})
-	if err != nil {
-		return fmt.Errorf("failed to write header: %s", err)
-	}
-
-	for city, info := range data {
-		record := []string{
-			city,
-			strconv.FormatFloat(info.Min, 'f', 2, 64),
-			strconv.FormatFloat(info.Max, 'f', 2, 64),
-			strconv.FormatFloat(info.Sum, 'f', 2, 64),
-			strconv.Itoa(info.Count),
-			strconv.FormatFloat(info.Avg, 'f', 2, 64),
-		}
-		err := writer.Write(record)
-		if err != nil {
-			return fmt.Errorf("failed to write record: %s", err)
-		}
-	}
-
-	return nil
-}
-
-func worker(record []string) {
-	temperature, err := strconv.ParseFloat(record[1], 64)
+func worker(weatherStation string, strTemperature string) {
+	temperature, err := strconv.ParseFloat(strTemperature, 64)
 	if err != nil {
 		panic(err)
 	}
 
 	mapMutex.Lock()
-	val, ok := weatherData[record[0]]
+	val, ok := weatherData[weatherStation]
 	if !ok {
 		val = Info{
 			Min:   temperature,
@@ -198,10 +114,11 @@ func worker(record []string) {
 		val = info
 	}
 
-	weatherData[record[0]] = val
+	weatherData[weatherStation] = val
 	mapMutex.Unlock()
 
 	countMux.Lock()
+
 	count++
 	if count%1000000 == 0 {
 		log.Println(count)
@@ -214,73 +131,35 @@ func worker(record []string) {
 	countMux.Unlock()
 }
 
-//
-//func importFile() {
-//	file, err := os.Open("measurements.txt")
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	var rawBytesChannel = make(chan []byte)
-//	var linesChannel = make(chan []string)
-//
-//	var count int
-//
-//	go func() {
-//		readFile(file, rawBytesChannel)
-//	}()
-//
-//	go func() {
-//		convertChunksToRecords(linesChannel, rawBytesChannel)
-//	}()
-//
-//	for record := range linesChannel {
-//		count++
-//		if count%10000000 == 0 {
-//			fmt.Println(count)
-//		}
-//
-//		_ = record
-//	}
-//
-//	time.Sleep(1 * time.Second)
-//}
-//
-//func convertChunksToRecords(linesChannel chan []string, rawBytesChannel chan []byte) {
-//	defer close(linesChannel)
-//	var leftover []byte
-//
-//	for rawData := range rawBytesChannel {
-//		rawData = append(leftover, rawData...)
-//		parts := bytes.Split(rawData, []byte("\n"))
-//		for i, part := range parts {
-//			if i == len(parts)-1 {
-//				leftover = part
-//			} else {
-//				line := string(part)
-//				records := strings.Split(line, ";")
-//				linesChannel <- records
-//			}
-//		}
-//
-//	}
-//
-//}
-//
-//func readFile(file *os.File, rawBytesChannel chan []byte) {
-//	const bufferSize = 67108864
-//	buffer := make([]byte, bufferSize)
-//
-//	defer close(rawBytesChannel)
-//	for {
-//		bytesRead, err := file.Read(buffer)
-//		if err != nil {
-//			if err == io.EOF {
-//				break
-//			}
-//			panic(err)
-//		}
-//		rawBytesChannel <- buffer[:bytesRead]
-//	}
-//	log.Printf("File read complete")
-//}
+func writeToCSV(data map[string]Info) error {
+	file, err := os.Create("weather_data.csv")
+	if err != nil {
+		return fmt.Errorf("failed to create result file: %s", err)
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	err = writer.Write([]string{"City", "Min", "Max", "Sum", "Count", "Avg"})
+	if err != nil {
+		return fmt.Errorf("failed to write header: %s", err)
+	}
+
+	for city, info := range data {
+		record := []string{
+			city,
+			strconv.FormatFloat(info.Min, 'f', 2, 32),
+			strconv.FormatFloat(info.Max, 'f', 2, 32),
+			strconv.FormatFloat(info.Sum, 'f', 2, 32),
+			strconv.Itoa(info.Count),
+			strconv.FormatFloat(info.Avg, 'f', 2, 32),
+		}
+		err := writer.Write(record)
+		if err != nil {
+			return fmt.Errorf("failed to write record: %s", err)
+		}
+	}
+
+	return nil
+}
