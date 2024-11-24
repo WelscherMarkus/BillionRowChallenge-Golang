@@ -73,6 +73,8 @@ func process() {
 		}
 
 		chunk := buffer[:byteAmount]
+
+		//Only needed because the file was created on Windows
 		test := bytes.Replace(chunk, []byte("\r"), []byte(""), -1)
 		lines := bytes.Split(test, []byte("\n"))
 
