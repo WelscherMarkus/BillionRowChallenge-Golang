@@ -1,2 +1,4 @@
 .idea
 measurements.txt
+cpu_profile.prof
+weather_data.csv
