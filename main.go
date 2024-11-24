@@ -7,8 +7,6 @@ import (
 	"os"
 	"runtime/pprof"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -35,8 +33,6 @@ func main() {
 	}
 	defer pprof.StopCPUProfile()
 
-	start := time.Now()
-
 	process()
 
 	weatherStationNames := make([]string, 0, len(weatherData))
@@ -54,8 +50,6 @@ func main() {
 		info := weatherData[weatherStation]
 		log.Println(weatherStation, "Min:", info.Min, "Max:", info.Max, "Avg:", info.Avg)
 	}
-
-	log.Println("Elapsed time:", time.Since(start))
 }
 
 func process() {
@@ -94,8 +88,10 @@ func process() {
 				remaining = nil
 			}
 
-			weatherStation, strTemperature, _ := strings.Cut(string(line), ";")
-			temperature, _ := strconv.ParseFloat(strTemperature, 32)
+			byteWeatherStation, byteTemperature, _ := bytes.Cut(line, []byte(";"))
+
+			temperature := convertFloatFromBytes(byteTemperature)
+			weatherStation := string(byteWeatherStation)
 
 			val, ok := weatherData[weatherStation]
 			if !ok {
@@ -128,4 +124,31 @@ func process() {
 		}
 	}
 
+}
+
+// Accuracy only to 1 decimal place and only to 100
+func convertFloatFromBytes(bytes []byte) float64 {
+	negative := false
+	index := 0
+
+	// Check if negative
+	if bytes[0] == '-' {
+		index++
+		negative = true
+	}
+
+	value := float64(bytes[index] - '0')
+	index++
+	if bytes[index] != '.' {
+		value = value*10 + float64(bytes[index]-'0')
+		index++
+	}
+
+	index++
+	value += float64(bytes[index]-'0') / 10
+	if negative {
+		value = -value
+	}
+
+	return value
 }
